@@ -10,6 +10,7 @@ class DeepFirstCrawler:
     def getcrawledpages(self, url:str, base_url:str, schema_name:str):
         while url is not None:
             page = self.browser.openpage(url, base_url, schema_name)
+            base_url = page.base_url # 设定页面的base_url以备链接到下一页时使用
             yield page
 
             # 深入爬取children链接
@@ -57,7 +58,7 @@ def StartTask(schema_file:str, start_url:str, start_page_schema:str):
 
 
 # StartTask("CrawlerTaskLib\\NISTSchema.json","hello\\ArticleSample2.html", "nist_article_page")
-# StartTask("CrawlerTaskLib\\NISTSchema.json","hello\\ListSample.html", "nist_list_page")
+# StartTask("CrawlerTaskLib\\NISTSchema.json","TestData\\ListPage2012.html", "nist_list_page")
 # StartTask("CrawlerTaskLib\\NISTSchema.json","https://www.nist.gov/publications/search", "nist_list_page")
 # StartTask("CrawlerTaskLib\\NISTSchema.json","http://localhost/publications/search", "nist_list_page")
 StartTask("CrawlerTaskLib\\NISTSchema.json","https://www.nist.gov/publications/search?k=&t=&a=&s=All&n=&d%5Bmin%5D=&d%5Bmax%5D=&page=2012", "nist_list_page")
