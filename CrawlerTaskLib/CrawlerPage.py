@@ -24,10 +24,12 @@ class HtmlExtractor:
                     children += sub_children
             elif field.get("type") == "sibling_link":
                 data[field["field_name"]] = html_tree.xpath(field["xpath"])
-                siblings.append((data[field["field_name"]], field["link_schema"]))
+                if data[field["field_name"]] != "": # 简单判断是否获取到url信息
+                    siblings.append((data[field["field_name"]], field["link_schema"]))
             elif field.get("type") == "child_link":
                 data[field["field_name"]] = html_tree.xpath(field["xpath"])
-                children.append((data[field["field_name"]], field["link_schema"]))
+                if data[field["field_name"]] != "": # 简单判断是否获取到url信息
+                    children.append((data[field["field_name"]], field["link_schema"]))
             else:   #这是最常见的情况，就是普通字段
                 data[field["field_name"]] = html_tree.xpath(field["xpath"])
         
