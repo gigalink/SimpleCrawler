@@ -2,8 +2,8 @@
     "description":"To get articles from https://www.nist.gov/publications/search",
     "schema":{
         "nist_list_page":[
-            {"field_name":"PagerText", "xpath":"string(//nav[@class='pager']/ul/li[1])", "required":true},
-            {"field_name":"NextPageUrl", "xpath":"string(//nav[@class='pager']/ul/li[2]/a/@href)", "type":"sibling_link", "link_schema":"nist_list_page"},
+            {"field_name":"PagerText", "xpath":"string(//div[@id='block-nist-www-content']/div/div/footer)", "required":true},
+            {"field_name":"NextPageUrl", "xpath":"string(//nav[@class='pager']/ul/li[@rel='next']/a/@href)", "type":"sibling_link", "link_schema":"nist_list_page"},
             {"field_name":"ArticleItemGroup", "xpath":"//div[@id='block-nist-www-content']/div/div/div", "type":"item_group", "sub_schema":"nist_list_item"}
         ],
         "nist_list_item":[

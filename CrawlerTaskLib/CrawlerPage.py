@@ -89,7 +89,12 @@ class VirtualBrowser:
         if base_url is None and parse_result.scheme != "" and parse_result.netloc != "":
             new_page.base_url = parse_result.scheme + "://" + parse_result.netloc
 
-        html_text = self.dataloader.load(new_page.url)
+        try:
+            html_text = self.dataloader.load(new_page.url)
+        except Exception as e:
+            new_page.status = "error"
+            new_page.error_msg = e.args
+            return new_page
         new_page.data, new_page.siblings, new_page.children = self.extractor.extract_from_html_text(html_text, schema_name)
         return new_page
 
@@ -100,3 +105,5 @@ class Page:
     schema_name = None
     url = None
     base_url = None
+    status = "empty"
+    error_msg = None

@@ -1,4 +1,6 @@
-from CrawlerPage import *
+from CrawlerPage import HtmlExtractor,DataLoader,VirtualBrowser
+from Logger import Logger
+from StorageClient import StorageClient
 import json
 
 class DeepFirstCrawler:
@@ -42,20 +44,20 @@ def StartTask(schema_file:str, start_url:str, start_page_schema:str):
     dataloader = DataLoader()
     # dataloader = FileDataLoader()
     browser = VirtualBrowser(dataloader, extractor)
-    # try:
-    #     rootPage = browser.openpage(start_url, start_page_schema)
-    # except requests.models.MissingSchema as e:
-    #     print(e.args)
 
     crawler = DeepFirstCrawler(browser)
-    f = open("sample.json", "a", encoding="utf-8")
+    storage = StorageClient("data.txt")
+    logger = Logger()
     for page in crawler.getcrawledpages(start_url, None, start_page_schema):
-        f.write(json.dumps(page.data)+"\n")
-    f.close()
+        if page.status != "error":
+            storage.send(page)
+            logger.info("[{0}] succeeded".format(page.url))
+        else:
+            logger.error("[{0}] {1}".format(page.url, str(page.error_msg)))
 
 
 # StartTask("CrawlerTaskLib\\NISTSchema.json","hello\\ArticleSample2.html", "nist_article_page")
 # StartTask("CrawlerTaskLib\\NISTSchema.json","hello\\ListSample.html", "nist_list_page")
-StartTask("CrawlerTaskLib\\NISTSchema.json","https://www.nist.gov/publications/search", "nist_list_page")
-# StartTask("CrawlerTaskLib\\NISTSchema.json","/publications/search", "nist_list_page")
-# StartTask("CrawlerTaskLib\\NISTSchema.json","https://www.nist.gov/publications/graph-database-approach-wireless-iiot-work-cell-performance-evaluation", "nist_article_page")
+# StartTask("CrawlerTaskLib\\NISTSchema.json","https://www.nist.gov/publications/search", "nist_list_page")
+# StartTask("CrawlerTaskLib\\NISTSchema.json","http://localhost/publications/search", "nist_list_page")
+StartTask("CrawlerTaskLib\\NISTSchema.json","https://www.nist.gov/publications/search?k=&t=&a=&s=All&n=&d%5Bmin%5D=&d%5Bmax%5D=&page=2012", "nist_list_page")
