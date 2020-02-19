@@ -1,0 +1,33 @@
+{
+    "description":"To get articles from https://www.nist.gov/publications/search",
+    "schema":{
+        "nist_list_page":[
+            {"field_name":"PagerText", "xpath":"string(//nav[@class='pager']/ul/li[1])", "required":true},
+            {"field_name":"NextPageUrl", "xpath":"string(//nav[@class='pager']/ul/li[2]/a/@href)", "type":"sibling_link", "link_schema":"nist_list_page"},
+            {"field_name":"ArticleItemGroup", "xpath":"//div[@id='block-nist-www-content']/div/div/div", "type":"item_group", "sub_schema":"nist_list_item"}
+        ],
+        "nist_list_item":[
+            {"field_name":"ArticlePageUrl", "xpath":"string(./article/div/header/h3/a/@href)", "type":"child_link", "link_schema":"nist_article_page", "required":true}
+        ],
+        "nist_article_page":[
+            {"field_name":"Title", "xpath":"string(//h1[@class='nist-page__title'])", "required":true},
+            {"field_name":"PublishTime", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Published\" field']//@datetime)"},
+            {"field_name":"Authors", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Author(s)\" field']/div/div)", "required":true},
+            {"field_name":"Abstract", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Abstract\" field']/div/text()[last()])", "required":true},
+            {"field_name":"Citation", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Citation\" field']/div/div[last()])"},
+            {"field_name":"ProceedingsTitle", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Proceedings Title\" field']/div/div[last()])"},
+            {"field_name":"Volume", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Volume\" field']/div/div[last()])"},
+            {"field_name":"Issue", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Issue\" field']/div/div[last()])"},
+            {"field_name":"ConferenceDates", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Conference Dates\" field']/div/div[last()])"},
+            {"field_name":"ConferenceLocation", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Conference Location\" field']/div/div[last()])"},
+            {"field_name":"ConferenceTitle", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Conference Title\" field']/div/div[last()])"},
+            {"field_name":"PubType", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Pub Type\" field']/div/div[last()])"},
+            {"field_name":"DownloadUrl", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Download Paper\" field']//a/@href)"},
+            {"field_name":"Keywords", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Keywords\" field']/div/div)"},
+            {"field_name":"NISTTopicAreas", "xpath":"//div[@data-layout-content-preview-placeholder-label='\"NIST Topic Areas\" field']/div/a/text()"},
+            {"field_name":"Changed", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Changed\" field']/div)"},
+            {"field_name":"PageCreateTime", "type":"calc_field", "base_field":"Changed", "extract_regex":"(?<=Created\\s)\\w+\\s+\\d+,\\s+\\d{4}", "converter":"DateTimeConverter", "convert_params":"%B %d, %Y"},
+            {"field_name":"PageUpdateTime", "type":"calc_field", "base_field":"Changed", "extract_regex":"(?<=Updated\\s)\\w+\\s+\\d+,\\s+\\d{4}", "converter":"DateTimeConverter", "convert_params":"%B %d, %Y"}
+        ]
+    }
+}
