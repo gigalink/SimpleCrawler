@@ -59,13 +59,14 @@ def StartTask(schema_file:str, start_url:str, start_page_schema:str, valve_name:
                         logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
                         break
                     storage.send(page)
-                    logger.info(page.url, "succeeded")
+                    logger.info(page.url, page.schema_name, "succeeded")
                 else:
-                    logger.error(page.url, str(page.error_msg))
+                    logger.error(page.url, page.schema_name, str(page.error_msg))
             logger.info("Task finished succesfully.")
 
 
-filter = [{'schema_name':'nist_article_page', 'field_name': 'PageCreateTime', 'compare_type': '<', 'compare_value': datetime.datetime(2020, 2, 10, 11, 16, 19)}]
+# filter = [{'schema_name':'nist_article_page', 'field_name': 'PageCreateTime', 'compare_type': '<', 'compare_value': datetime.datetime(2020, 2, 10, 11, 16, 19)}]
+filter = []
 # StartTask("CrawlerTaskLib\\NISTSchema.json","TestData\\ArticleSample2.html", "nist_article_page", "FieldValueValve", filter, ["nist_article_page"])
 # StartTask("CrawlerTaskLib\\NISTSchema.json","TestData\\ListPage2012.html", "nist_list_page", "FieldValueValve", filter, ["nist_article_page","nist_list_page"])
 StartTask("CrawlerTaskLib\\NISTSchema.json","https://www.nist.gov/publications/search", "nist_list_page", "FieldValueValve", filter, ["nist_article_page","nist_list_page"])
