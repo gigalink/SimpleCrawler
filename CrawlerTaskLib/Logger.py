@@ -1,22 +1,30 @@
 import datetime
+import csv
 
 class Logger:
     def __init__(self):
         now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        self.errorlog = open("Logs\\error{0}.txt".format(now), "a", encoding="utf-8")
-        self.alllog = open("Logs\\log{0}.txt".format(now), "a", encoding="utf-8")
-    
-    def __del__(self):
-        self.alllog.close()
-        self.errorlog.close()
+        self.errorlogfile = open("Logs\\error{0}.csv".format(now), "a", newline="", encoding="utf-8")
+        self.errorlogwriter = csv.writer(self.errorlogfile)
+        self.alllogfile = open("Logs\\log{0}.csv".format(now), "a", newline="", encoding="utf-8")
+        self.alllogwriter = csv.writer(self.alllogfile)
 
-    def error(self, msg:str):
-        line = "["+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+"] [Error] " + msg
-        self.alllog.write(line + "\n")
-        self.errorlog.write(line + "\n")
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, trace):
+        self.errorlogfile.close()
+        self.alllogfile.close()
+
+    def error(self, *msgs):
+        line = [datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Error"]
+        line += list(msgs)
+        self.alllogwriter.writerow(line)
+        self.errorlogwriter.writerow(line)
         print(line)
     
-    def info(self, msg:str):
-        line = "["+datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")+"] [Info] " + msg
-        self.alllog.write(line + "\n")
+    def info(self, *msgs):
+        line = [datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Info"]
+        line += list(msgs)
+        self.alllogwriter.writerow(line)
         print(line)

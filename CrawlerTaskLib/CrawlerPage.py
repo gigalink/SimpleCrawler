@@ -62,7 +62,7 @@ def get_convertor(name:str):
 
 class DateTimeConvertor:
     def convert(self, text:str, param):
-        return datetime.datetime.strptime(text, param).strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.datetime.strptime(text, param)#.strftime("%Y-%m-%d %H:%M:%S")
 
 # 数据加载器的基类，默认实现为通过Http get请求获取数据
 class DataLoader:
@@ -83,6 +83,7 @@ class VirtualBrowser:
         new_page = Page()
         new_page.url = url
         new_page.base_url = base_url
+        new_page.schema_name = schema_name
         # 如果url不是完整版，则用base_url补足
         parse_result = requests.utils.urlparse(url)
         if parse_result.scheme == "" and base_url is not None:
@@ -92,12 +93,12 @@ class VirtualBrowser:
             new_page.base_url = parse_result.scheme + "://" + parse_result.netloc
 
         try:
-            html_text = self.dataloader.load(new_page.url)
+            new_page.html_text = self.dataloader.load(new_page.url)
         except Exception as e:
             new_page.status = "error"
             new_page.error_msg = e.args
             return new_page
-        new_page.data, new_page.siblings, new_page.children = self.extractor.extract_from_html_text(html_text, schema_name)
+        new_page.data, new_page.siblings, new_page.children = self.extractor.extract_from_html_text(new_page.html_text, schema_name)
         return new_page
 
 class Page:
@@ -107,5 +108,6 @@ class Page:
     schema_name = None
     url = None
     base_url = None
+    html_text = ""
     status = "empty"
     error_msg = None

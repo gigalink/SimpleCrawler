@@ -1,7 +1,9 @@
 from CrawlerPage import HtmlExtractor,DataLoader,VirtualBrowser
+import Valve
 from Logger import Logger
 from StorageClient import StorageClient
 import json
+import datetime
 
 class DeepFirstCrawler:
     def __init__(self, browser:VirtualBrowser):
@@ -34,7 +36,7 @@ class FileDataLoader(DataLoader):
         f.close()
         return text
 
-def StartTask(schema_file:str, start_url:str, start_page_schema:str):
+def StartTask(schema_file:str, start_url:str, start_page_schema:str, valve_name:str, valve_param:list, store_schemas:list):
     # 初始化该任务的数据抽取器
     f = open(schema_file, encoding="utf-8")
     text = f.read()
@@ -47,18 +49,25 @@ def StartTask(schema_file:str, start_url:str, start_page_schema:str):
     browser = VirtualBrowser(dataloader, extractor)
 
     crawler = DeepFirstCrawler(browser)
-    storage = StorageClient("data.txt")
-    logger = Logger()
-    for page in crawler.getcrawledpages(start_url, None, start_page_schema):
-        if page.status != "error":
-            storage.send(page)
-            logger.info("[{0}] succeeded".format(page.url))
-        else:
-            logger.error("[{0}] {1}".format(page.url, str(page.error_msg)))
+    valve = Valve.getvalvebyname(valve_name, valve_param)
+
+    with StorageClient(config["schema"], store_schemas) as storage:
+        with Logger() as logger:
+            for page in crawler.getcrawledpages(start_url, None, start_page_schema):
+                if page.status != "error":
+                    if valve.stop(page):
+                        logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
+                        break
+                    storage.send(page)
+                    logger.info(page.url, "succeeded")
+                else:
+                    logger.error(page.url, str(page.error_msg))
+            logger.info("Task finished succesfully.")
 
 
-# StartTask("CrawlerTaskLib\\NISTSchema.json","hello\\ArticleSample2.html", "nist_article_page")
-# StartTask("CrawlerTaskLib\\NISTSchema.json","TestData\\ListPage2012.html", "nist_list_page")
-# StartTask("CrawlerTaskLib\\NISTSchema.json","https://www.nist.gov/publications/search", "nist_list_page")
-# StartTask("CrawlerTaskLib\\NISTSchema.json","http://localhost/publications/search", "nist_list_page")
-StartTask("CrawlerTaskLib\\NISTSchema.json","https://www.nist.gov/publications/search?k=&t=&a=&s=All&n=&d%5Bmin%5D=&d%5Bmax%5D=&page=2012", "nist_list_page")
+filter = [{'schema_name':'nist_article_page', 'field_name': 'PageCreateTime', 'compare_type': '<', 'compare_value': datetime.datetime(2020, 2, 10, 11, 16, 19)}]
+# StartTask("CrawlerTaskLib\\NISTSchema.json","TestData\\ArticleSample2.html", "nist_article_page", "FieldValueValve", filter, ["nist_article_page"])
+# StartTask("CrawlerTaskLib\\NISTSchema.json","TestData\\ListPage2012.html", "nist_list_page", "FieldValueValve", filter, ["nist_article_page","nist_list_page"])
+StartTask("CrawlerTaskLib\\NISTSchema.json","https://www.nist.gov/publications/search", "nist_list_page", "FieldValueValve", filter, ["nist_article_page","nist_list_page"])
+# StartTask("CrawlerTaskLib\\NISTSchema.json","http://localhost/publications/search", "nist_list_page", "FieldValueValve", filter, ["nist_article_page","nist_list_page"])
+# StartTask("CrawlerTaskLib\\NISTSchema.json","https://www.nist.gov/publications/search?k=&t=&a=&s=All&n=&d%5Bmin%5D=&d%5Bmax%5D=&page=2012", "nist_list_page", "FieldValueValve", filter, ["nist_article_page","nist_list_page"])
