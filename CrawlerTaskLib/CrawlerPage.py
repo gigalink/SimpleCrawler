@@ -2,6 +2,7 @@ from lxml import html
 import requests
 import re
 import datetime
+import csv
 
 # 支持读取schema配置来指定页面的解析方式
 class HtmlExtractor:
@@ -73,6 +74,25 @@ class DataLoader:
         page = requests.get(url, cookies=cookie)
         return page.text
 
+# 当数据已经被爬取到本地磁盘，仅仅做重新解析字段时使用，该类会将url映射为本地文件进行访问
+class LocalDataLoader(DataLoader):
+    def __init__(self, mappingfilepath:str):
+        self.mappingfilepath = mappingfilepath
+        self.mapping = {}
+        file = open(f"{mappingfilepath}/0mapping.csv", "r", newline="", encoding="utf-8")
+        reader = csv.reader(file)
+        for row in reader:
+            self.mapping[row[0]] = row[1]
+        file.close()
+
+    def load(self, url):
+        filename = self.mapping.get(url)
+        if filename is None:
+            raise Exception("The url does not exist in mapping file.")
+        f = open(f"{self.mappingfilepath}/{filename}", encoding="utf-8")
+        text = f.read()
+        f.close()
+        return text
 
 class VirtualBrowser:
     def __init__(self, dataloader:DataLoader, extractor:HtmlExtractor):

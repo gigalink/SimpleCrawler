@@ -1,4 +1,4 @@
-from CrawlerPage import HtmlExtractor,DataLoader,VirtualBrowser
+from CrawlerPage import HtmlExtractor,DataLoader,LocalDataLoader,VirtualBrowser
 import Valve
 from Logger import Logger
 from StorageClient import StorageClient
@@ -82,7 +82,7 @@ def StartTask(schema_file:str, start_url:str, start_page_schema:str, valve_name:
                     logger.error(page.url, page.schema_name, str(page.error_msg))
             logger.info("Task finished succesfully.")
 
-
+# 如果一个任务有部分页面没有爬取成功，则用此方法重跑
 def RetryErrorItems(taskid:str):
     if taskid is None or taskid=="": 
         return
@@ -130,4 +130,45 @@ def RetryErrorItems(taskid:str):
                         logger.info(page.url, page.schema_name, "succeeded")
                     else:
                         logger.error(page.url, page.schema_name, str(page.error_msg))
+            logger.info("Task finished succesfully.")
+
+# 如果一个任务的页面已经爬取下来了，但是解析方式要变化，用这个方法在原有任务基础上重新解析
+def ReExtractTask(taskid:str):
+    if taskid is None or taskid=="": 
+        return
+    # 读取要重试错误项的任务的各项参数，但是起始页参数不用读取，因为重试是按错误记录的页面来的
+    f = open("Tasks/{0}/taskconfig.json".format(taskid), encoding="utf-8")
+    taskconfigstr = f.read()
+    f.close()
+    taskconfig = json.loads(taskconfigstr)
+    schema_file = taskconfig["schema_file"]
+    start_url = taskconfig["start_url"]
+    start_page_schema = taskconfig["start_page_schema"]
+    valve_name = taskconfig["valve_name"]
+    valve_param = taskconfig["valve_param"]
+    store_schemas = taskconfig["store_schemas"]
+    # 初始化该任务的数据抽取器
+    f = open(schema_file, encoding="utf-8")
+    text = f.read()
+    f.close()
+    config = json.loads(text)
+    extractor = HtmlExtractor(config)
+    # 初始化数据获取器，用于获取HTML文本
+    dataloader = LocalDataLoader(f"Tasks/{taskid}/Source")
+    browser = VirtualBrowser(dataloader, extractor)
+
+    crawler = DeepFirstCrawler(browser)
+    valve = Valve.getvalvebyname(valve_name, valve_param)
+
+    with StorageClient(taskid, config["schema"], store_schemas) as storage:
+        with Logger(taskid) as logger:
+            for page in crawler.getcrawledpages(start_url, None, start_page_schema):
+                if page.status != "error":
+                    if valve.stop(page):
+                        logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
+                        break
+                    storage.send(page, savesource=False)    # 因为本来就只是解析，源文件早已存在，所以就不用再存了
+                    logger.info(page.url, page.schema_name, "succeeded")
+                else:
+                    logger.error(page.url, page.schema_name, str(page.error_msg))
             logger.info("Task finished succesfully.")
