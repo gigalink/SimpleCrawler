@@ -4,15 +4,14 @@ import os
 from CrawlerPage import Page
 
 class StorageClient:
-    def __init__(self, schemas:dict, store_schemas:list):
+    def __init__(self, taskid, schemas:dict, store_schemas:list):
         # schemas是爬取相关的所有页面类型设置
         # store_schemas是要保存的页面类型
-        now = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        self.instanceid = now
+        self.instanceid = taskid
         # 这些用于保存原始html数据
-        if not os.path.exists("CrawledData/Source/{0}".format(now)):
-            os.makedirs("CrawledData/Source/{0}".format(now))
-        self.sourcemappingfile = open("CrawledData/Source/{0}/0mapping.csv".format(now), "a", newline="", encoding="utf-8")
+        if not os.path.exists("CrawledData/Source/{0}".format(taskid)):
+            os.makedirs("CrawledData/Source/{0}".format(taskid))
+        self.sourcemappingfile = open("CrawledData/Source/{0}/0mapping.csv".format(taskid), "a", newline="", encoding="utf-8")
         self.sourcemappingwriter = csv.writer(self.sourcemappingfile)
         self.sourcemappingwriter.writerow(["origin url", "filename"])
         self.pagecount = 0 # 该实例累积保存的页面数
@@ -21,8 +20,10 @@ class StorageClient:
         self.datafilewriters = {}
         self.schemascolumns = {}
         self.store_schemas = store_schemas
+        if not os.path.exists("CrawledData/Extracted"):
+            os.makedirs("CrawledData/Extracted")
         for schema in store_schemas:
-            self.datafiles[schema] = open("CrawledData/Extracted/{0}{1}.csv".format(schema, now), "a", newline="", encoding="utf-8")
+            self.datafiles[schema] = open("CrawledData/Extracted/{0}{1}.csv".format(schema, taskid), "a", newline="", encoding="utf-8")
             self.datafilewriters[schema] = csv.writer(self.datafiles[schema])
             columns = [field["field_name"] for field in schemas[schema]]
             self.datafilewriters[schema].writerow(["url"] + columns)
