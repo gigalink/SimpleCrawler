@@ -4,11 +4,11 @@ import os
 
 class Logger:
     def __init__(self, taskid):
-        if not os.path.exists("Logs"):
-            os.makedirs("Logs")
-        self.errorlogfile = open("Logs\\error{0}.csv".format(taskid), "a", newline="", encoding="utf-8")
+        if not os.path.exists("Tasks/{0}".format(taskid)):
+            os.makedirs("Tasks/{0}".format(taskid))
+        self.errorlogfile = open("Tasks/{0}/error.csv".format(taskid), "a", newline="", encoding="utf-8")
         self.errorlogwriter = csv.writer(self.errorlogfile)
-        self.alllogfile = open("Logs\\log{0}.csv".format(taskid), "a", newline="", encoding="utf-8")
+        self.alllogfile = open("Tasks/{0}/log.csv".format(taskid), "a", newline="", encoding="utf-8")
         self.alllogwriter = csv.writer(self.alllogfile)
 
     def __enter__(self):

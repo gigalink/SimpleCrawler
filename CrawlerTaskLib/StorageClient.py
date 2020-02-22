@@ -9,9 +9,9 @@ class StorageClient:
         # store_schemas是要保存的页面类型
         self.instanceid = taskid
         # 这些用于保存原始html数据
-        if not os.path.exists("CrawledData/Source/{0}".format(taskid)):
-            os.makedirs("CrawledData/Source/{0}".format(taskid))
-        self.sourcemappingfile = open("CrawledData/Source/{0}/0mapping.csv".format(taskid), "a", newline="", encoding="utf-8")
+        if not os.path.exists("Tasks/{0}/Source".format(taskid)):
+            os.makedirs("Tasks/{0}/Source".format(taskid))
+        self.sourcemappingfile = open("Tasks/{0}/Source/0mapping.csv".format(taskid), "a", newline="", encoding="utf-8")
         self.sourcemappingwriter = csv.writer(self.sourcemappingfile)
         self.sourcemappingwriter.writerow(["origin url", "filename"])
         self.pagecount = 0 # 该实例累积保存的页面数
@@ -20,10 +20,8 @@ class StorageClient:
         self.datafilewriters = {}
         self.schemascolumns = {}
         self.store_schemas = store_schemas
-        if not os.path.exists("CrawledData/Extracted"):
-            os.makedirs("CrawledData/Extracted")
         for schema in store_schemas:
-            self.datafiles[schema] = open("CrawledData/Extracted/{0}{1}.csv".format(schema, taskid), "a", newline="", encoding="utf-8")
+            self.datafiles[schema] = open("Tasks/{0}/{1}.csv".format(taskid, schema), "a", newline="", encoding="utf-8")
             self.datafilewriters[schema] = csv.writer(self.datafiles[schema])
             columns = [field["field_name"] for field in schemas[schema]]
             self.datafilewriters[schema].writerow(["url"] + columns)
@@ -41,7 +39,7 @@ class StorageClient:
         # 爬取到的页面源文件都需要存起来
         self.pagecount += 1
         sourcefilename = "{0}.html".format(self.pagecount)
-        f = open("CrawledData/Source/{0}/{1}".format(self.instanceid, sourcefilename), "wt", encoding="utf-8")
+        f = open("Tasks/{0}/Source/{1}".format(self.instanceid, sourcefilename), "wt", encoding="utf-8")
         f.write(page.html_text)
         f.close()
         self.sourcemappingwriter.writerow([page.url, sourcefilename])
