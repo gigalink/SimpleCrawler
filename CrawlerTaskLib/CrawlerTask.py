@@ -5,6 +5,7 @@ from StorageClient import StorageClient
 import json
 import datetime
 import os
+import csv
 
 class DeepFirstCrawler:
     def __init__(self, browser:VirtualBrowser):
@@ -81,3 +82,52 @@ def StartTask(schema_file:str, start_url:str, start_page_schema:str, valve_name:
                     logger.error(page.url, page.schema_name, str(page.error_msg))
             logger.info("Task finished succesfully.")
 
+
+def RetryErrorItems(taskid:str):
+    if taskid is None or taskid=="": 
+        return
+    # 读取要重试错误项的任务的各项参数，但是起始页参数不用读取，因为重试是按错误记录的页面来的
+    f = open("Tasks/{0}/taskconfig.json".format(taskid), encoding="utf-8")
+    taskconfigstr = f.read()
+    f.close()
+    taskconfig = json.loads(taskconfigstr)
+    schema_file = taskconfig["schema_file"]
+    valve_name = taskconfig["valve_name"]
+    valve_param = taskconfig["valve_param"]
+    store_schemas = taskconfig["store_schemas"]
+    # 初始化该任务的数据抽取器
+    f = open(schema_file, encoding="utf-8")
+    text = f.read()
+    f.close()
+    config = json.loads(text)
+    extractor = HtmlExtractor(config)
+    # 初始化数据获取器，用于获取HTML文本
+    dataloader = DataLoader()
+    # dataloader = FileDataLoader()
+    browser = VirtualBrowser(dataloader, extractor)
+
+    crawler = DeepFirstCrawler(browser)
+    valve = Valve.getvalvebyname(valve_name, valve_param)
+
+    # 根据错误日志获取需要重爬的页面
+    errorlogs = []
+    with open("Tasks/{0}/error.csv".format(taskid), "r", newline="", encoding="utf-8") as errorlogfile:
+        errorlogreader = csv.reader(errorlogfile)
+        errorlogs = [row for row in errorlogreader]
+
+    with StorageClient(taskid, config["schema"], store_schemas) as storage:
+        with Logger(taskid) as logger:
+            # 将读取到的每个条目尝试进行爬取
+            for errorItem in errorlogs:
+                start_url = errorItem[2]
+                start_page_schema = errorItem[3]
+                for page in crawler.getcrawledpages(start_url, None, start_page_schema):
+                    if page.status != "error":
+                        if valve.stop(page):
+                            logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
+                            break
+                        storage.send(page)
+                        logger.info(page.url, page.schema_name, "succeeded")
+                    else:
+                        logger.error(page.url, page.schema_name, str(page.error_msg))
+            logger.info("Task finished succesfully.")
