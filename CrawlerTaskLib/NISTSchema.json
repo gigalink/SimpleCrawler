@@ -23,7 +23,7 @@
             {"field_name":"ConferenceTitle", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Conference Title\" field']/div/div[last()])"},
             {"field_name":"ReportNumber", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Report Number\" field']/div/div[last()])"},
             {"field_name":"NISTPubSeries", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"NIST Pub Series\" field']/div/div[last()])"},
-            {"field_name":"PubWeblink", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Pub Weblink\" field']/div/div[last()])"},
+            {"field_name":"PubWeblink", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Pub Weblink\" field']//a/@href)"},
             {"field_name":"PublisherInfo", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Publisher Info\" field']/div/div[last()])"},
             {"field_name":"PubType", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Pub Type\" field']/div/div[last()])"},
             {"field_name":"SupercedesPublication", "xpath":"string(//div[@data-layout-content-preview-placeholder-label='\"Supercedes Publication\" field']/div/div[last()])"},
