@@ -8,6 +8,31 @@ import csv
 class HtmlExtractor:
     def __init__(self, config:dict):
         self.config = config
+    
+    def get_field_value(self, data:dict, field:dict, html_tree:html.HtmlElement):
+        base_field = field.get("base_field")
+        field_value = None
+        # 从base_field或者从xpath解析出初始值
+        if base_field != None:
+            field_value = data[base_field]
+        else:
+            field_value = html_tree.xpath(field["xpath"])
+        if field_value is None: return field_value
+        # 如果有配置正则抽取，那么进行正则匹配以抽取值
+        extract_regex = field.get("extract_regex")
+        if extract_regex != None:
+            res = re.search(extract_regex, field_value)
+            if res:
+                field_value = res.group()
+            else:
+                field_value = None
+        if field_value is None: return field_value
+        # 如果有配置convertor，则调用convertor进行转换
+        convertor_name = field.get("converter")
+        if convertor_name != None:
+            convertor = get_convertor(convertor_name)
+            field_value = convertor.convert(field_value, field.get("convert_params"))
+        return field_value
 
     def extract_from_html_element(self, html_tree:html.HtmlElement, schema_name:str):
         waitingFields = []
@@ -24,31 +49,19 @@ class HtmlExtractor:
                     siblings += sub_siblings
                     children += sub_children
             elif field.get("type") == "sibling_link":
-                data[field["field_name"]] = html_tree.xpath(field["xpath"])
+                data[field["field_name"]] = self.get_field_value(data, field, html_tree)
                 if data[field["field_name"]] != "": # 简单判断是否获取到url信息
                     siblings.append((data[field["field_name"]], field["link_schema"]))
             elif field.get("type") == "child_link":
-                data[field["field_name"]] = html_tree.xpath(field["xpath"])
+                data[field["field_name"]] = self.get_field_value(data, field, html_tree)
                 if data[field["field_name"]] != "": # 简单判断是否获取到url信息
                     children.append((data[field["field_name"]], field["link_schema"]))
             else:   #这是最常见的情况，就是普通字段
-                data[field["field_name"]] = html_tree.xpath(field["xpath"])
+                data[field["field_name"]] =  self.get_field_value(data, field, html_tree)
         
         # 严谨来说，这里应该检查一下base_field是否是普通字段。以后补上
         for field in waitingFields:
-            base_field = field.get("base_field")
-            extract_regex = field.get("extract_regex")
-            if base_field!=None and extract_regex!=None:
-                res = re.search(extract_regex, data[base_field])
-                if res: data[field["field_name"]] = res.group()
-        
-        # 最后各个字段还要根据配置做进一步格式化
-        for field in self.config["schema"][schema_name]:
-            convertor_name = field.get("converter")
-            origin_value = data.get(field["field_name"])
-            if convertor_name != None and origin_value != None:
-                convertor = get_convertor(convertor_name)
-                data[field["field_name"]] = convertor.convert(origin_value, field.get("convert_params"))
+            data[field["field_name"]] =  self.get_field_value(data, field, html_tree)
 
         return data, siblings, children
 
@@ -108,6 +121,8 @@ class VirtualBrowser:
         # 如果url不是完整版，则用base_url补足
         parse_result = requests.utils.urlparse(url)
         if parse_result.scheme == "" and base_url is not None:
+            if url[0]!="/":
+                url = "/" + url
             new_page.url = base_url + url
         # 如果base_url为空，那么根据url解析出base_url
         if base_url is None and parse_result.scheme != "" and parse_result.netloc != "":
