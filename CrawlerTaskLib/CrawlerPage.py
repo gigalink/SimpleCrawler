@@ -72,6 +72,7 @@ class DataLoader:
     def load(self, url):
         cookie = {} 
         page = requests.get(url, cookies=cookie)
+        page.encoding = page.apparent_encoding
         return page.text
 
 # 当数据已经被爬取到本地磁盘，仅仅做重新解析字段时使用，该类会将url映射为本地文件进行访问
