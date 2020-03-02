@@ -12,8 +12,11 @@ class DeepFirstCrawler:
         self.browser = browser
     
     def getcrawledpages(self, url:str, base_url:str, schema_name:str):
+        old_url = None
         while url is not None:
             page = self.browser.openpage(url, base_url, schema_name)
+            if page.url == old_url: # 如果下一页和上一页相同，那么说明已经到底了，没必要继续爬取了
+                return
             base_url = page.base_url # 设定页面的base_url以备链接到下一页时使用
             yield page
 
@@ -25,6 +28,7 @@ class DeepFirstCrawler:
             # 爬取sibling链接，因为这个链接是翻页用的，所以虽然这是个列表，但实际上最多只取第一项
             if len(page.siblings) > 0:
                 url = page.siblings[0][0]
+                old_url = page.url
             else:
                 url = None
             

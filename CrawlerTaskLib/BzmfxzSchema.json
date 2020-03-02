@@ -1,0 +1,20 @@
+{
+    "description":"标准免费下载网的解析文件",
+    "schema":{
+        "bzmfxz_list_page":[
+            {"field_name":"PageIndex", "xpath":"string(//span[@id='pe100_page_显示全站搜索_分页_按标题']/span)"},
+            {"field_name":"NextPageUrl", "xpath":"string(//span[@id='pe100_page_显示全站搜索_分页_按标题']/span/following-sibling::a[1]/@href)", "type":"sibling_link", "link_schema":"bzmfxz_list_page"},
+            {"field_name":"ArticleItemGroup", "xpath":"//div[@class='c_content']/a", "type":"item_group", "sub_schema":"bzmfxz_list_item"}
+        ],
+        "bzmfxz_list_item":[
+            {"field_name":"BriefPageUrl", "xpath":"string(./@href)", "type":"child_link", "link_schema":"bzmfxz_brief_page"}
+        ],
+        "bzmfxz_brief_page":[
+            {"field_name":"DownloadPageUrl", "xpath":"string(//a[@class='STYLE1']/@onclick)", "extract_regex":"(?<=')[^']+", "type":"child_link", "link_schema":"bzmfxz_download_page"}
+        ],
+        "bzmfxz_download_page":[
+            {"field_name":"Title", "xpath":"string(//h1[@class='STYLE1'])"},
+            {"field_name":"DownloadUrl", "xpath":"string(//form[@id='ShowDownloadUrl']//a/@href)"}
+        ]
+    }
+}
