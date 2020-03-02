@@ -25,7 +25,7 @@ class StorageClient:
         self.store_schemas = store_schemas
         for schema in store_schemas:
             needHeader = not os.path.exists("Tasks/{0}/{1}.csv".format(taskid, schema))
-            self.datafiles[schema] = open("Tasks/{0}/{1}.csv".format(taskid, schema), "a", newline="", encoding="utf-8")
+            self.datafiles[schema] = open("Tasks/{0}/{1}.csv".format(taskid, schema), "a", newline="", encoding="utf-8-sig")
             self.datafilewriters[schema] = csv.writer(self.datafiles[schema])
             columns = [field["field_name"] for field in schemas[schema]]
             if needHeader:
