@@ -1,4 +1,4 @@
-from CrawlerPage import HtmlExtractor,DataLoader,LocalDataLoader,VirtualBrowser
+from CrawlerPage import HtmlExtractor,DataLoader,LocalDataLoader,VirtualBrowser,Page
 import Valve
 from Logger import Logger
 from StorageClient import StorageClient
@@ -10,6 +10,55 @@ import csv
 class DeepFirstCrawler:
     def __init__(self, browser:VirtualBrowser):
         self.browser = browser
+        self.currentpage = None
+        self.pagestack = []
+
+    def addtargetpages(self, links:list):
+        # links是个列表，里面的元素是(url, schema_name)元组
+        # 这也就是爬虫的爬取列表
+        for link in links:
+            page = Page()
+            page.siblings.append(link)
+            self.pagestack.append(page)
+
+    def addtargetpage(self, url:str, schema_name:str):
+        page = Page()
+        page.siblings.append((url, schema_name))
+        if self.currentpage is None:
+            self.currentpage = page
+        else:
+            self.pagestack.append(page)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        while True:
+            if self.currentpage is None:
+                # 如果当前页面是空，则查看队列里的情况，如果队列也是空，那么说明没有要爬取的
+                if len(self.pagestack) > 0:
+                    self.currentpage = self.pagestack.pop()
+                else:
+                    raise StopIteration
+            elif len(self.currentpage.children) > 0:
+                nextlink = self.currentpage.children.pop()
+                base_url = self.currentpage.base_url
+                self.pagestack.append(self.currentpage)
+                self.currentpage = self.browser.openpage(nextlink[0], base_url, nextlink[1])
+                return self.currentpage
+            elif len(self.currentpage.siblings) > 0:
+                # 这个分支是子链接都处理完了的情况，那么currentpage也就完全处理完了，直接丢弃即可
+                nextlink = self.currentpage.siblings.pop()
+                base_url = self.currentpage.base_url
+                self.currentpage = self.browser.openpage(nextlink[0], base_url, nextlink[1])
+                return self.currentpage
+            else:
+                # 子链接和兄弟链接都小于0，那么就该返回上一级了
+                if len(self.pagestack) > 0:
+                    self.currentpage = self.pagestack.pop()
+                else:
+                    raise StopIteration
+
     
     def getcrawledpages(self, url:str, base_url:str, schema_name:str):
         old_url = None
@@ -71,11 +120,12 @@ def StartTask(schema_file:str, start_url:str, start_page_schema:str, valve_name:
     browser = VirtualBrowser(dataloader, extractor)
 
     crawler = DeepFirstCrawler(browser)
+    crawler.addtargetpage(start_url, start_page_schema)
     valve = Valve.getvalvebyname(valve_name, valve_param)
 
     with StorageClient(taskid, config["schema"], store_schemas) as storage:
         with Logger(taskid) as logger:
-            for page in crawler.getcrawledpages(start_url, None, start_page_schema):
+            for page in crawler:
                 if page.status != "error":
                     if valve.stop(page):
                         logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
