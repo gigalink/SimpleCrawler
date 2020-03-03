@@ -29,6 +29,20 @@ class DeepFirstCrawler:
         else:
             self.pagestack.append(page)
 
+    def getcheckpoint(self):
+        if self.currentpage is not None:
+            self.pagestack.append(self.currentpage)
+        checkpoint = [(page.children, page.siblings, page.base_url) for page in self.pagestack]
+        return checkpoint
+
+    def restorecheckpoint(self, checkpoint:list):
+        for node in checkpoint:
+            page = Page()
+            page.children = node[0]
+            page.siblings = node[1]
+            page.base_url = node[2]
+            self.pagestack.append(page)
+
     def __iter__(self):
         return self
 
@@ -59,30 +73,6 @@ class DeepFirstCrawler:
                 else:
                     raise StopIteration
 
-    
-    def getcrawledpages(self, url:str, base_url:str, schema_name:str):
-        old_url = None
-        while url is not None:
-            page = self.browser.openpage(url, base_url, schema_name)
-            if page.url == old_url: # 如果下一页和上一页相同，那么说明已经到底了，没必要继续爬取了
-                return
-            base_url = page.base_url # 设定页面的base_url以备链接到下一页时使用
-            yield page
-
-            # 深入爬取children链接
-            for childlink in page.children:
-                for childpage in self.getcrawledpages(childlink[0], page.base_url, childlink[1]):
-                    yield childpage
-            
-            # 爬取sibling链接，因为这个链接是翻页用的，所以虽然这是个列表，但实际上最多只取第一项
-            if len(page.siblings) > 0:
-                url = page.siblings[0][0]
-                old_url = page.url
-            else:
-                url = None
-            
-
-
 # 这个DataLoader支持从文件中获取页面，可供测试用
 class FileDataLoader(DataLoader):
     def load(self, url):
@@ -91,7 +81,15 @@ class FileDataLoader(DataLoader):
         f.close()
         return text
 
-def StartTask(schema_file:str, start_url:str, start_page_schema:str, valve_name:str, valve_param:list, store_schemas:list, taskid:str=None):
+class Cancellation:
+    def __init__(self, param):
+        self.breaktime = datetime.datetime.strptime(param, "%Y-%m-%d %H:%M:%S")
+
+    def cancel(self):
+        now = datetime.datetime.now()
+        return now > self.breaktime
+
+def StartTask(schema_file:str, start_url:str, start_page_schema:str, valve_name:str, valve_param:list, store_schemas:list, cancellation:Cancellation, taskid:str=None):
     if taskid is None: 
         taskid = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     # 用文件记下当前任务的各项参数
@@ -127,17 +125,24 @@ def StartTask(schema_file:str, start_url:str, start_page_schema:str, valve_name:
         with Logger(taskid) as logger:
             for page in crawler:
                 if page.status != "error":
+                    storage.send(page)
+                    logger.info(page.url, page.schema_name, "succeeded")
                     if valve.stop(page):
                         logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
                         break
-                    storage.send(page)
-                    logger.info(page.url, page.schema_name, "succeeded")
                 else:
                     logger.error(page.url, page.schema_name, str(page.error_msg))
+                if cancellation.cancel():
+                    # 符合任务暂停条件的时候，记录下当前爬取状态，然后停止
+                    checkpoint = crawler.getcheckpoint()
+                    f = open("Tasks/{0}/checkpoint.json".format(taskid), "w", encoding="utf-8")
+                    f.write(json.dumps(checkpoint))
+                    f.close()
+                    break
             logger.info("Task finished succesfully.")
 
-# 如果一个任务有部分页面没有爬取成功，则用此方法重跑
-def RetryErrorItems(taskid:str):
+# 如果一个任务未跑完，或者有部分页面没有爬取成功，则用此方法重跑
+def GoOnTask(taskid:str, cancellation:Cancellation):
     if taskid is None or taskid=="": 
         return
     # 读取要重试错误项的任务的各项参数，但是起始页参数不用读取，因为重试是按错误记录的页面来的
@@ -163,27 +168,36 @@ def RetryErrorItems(taskid:str):
     crawler = DeepFirstCrawler(browser)
     valve = Valve.getvalvebyname(valve_name, valve_param)
 
-    # 根据错误日志获取需要重爬的页面
-    errorlogs = []
+    # 根据错误日志设定需要重爬的页面
     with open("Tasks/{0}/error.csv".format(taskid), "r", newline="", encoding="utf-8") as errorlogfile:
         errorlogreader = csv.reader(errorlogfile)
-        errorlogs = [row for row in errorlogreader]
+        errorpagelinks = [(row[2], row[3]) for row in errorlogreader]
+        crawler.addtargetpages(errorpagelinks)
+    # 根据checkpoint记录恢复上次爬取中断的位置
+    with open("Tasks/{0}/checkpoint.json".format(taskid), "r", encoding="utf-8") as checkpointfile:
+        checkpointstr = checkpointfile.read()
+        checkpoint = json.loads(checkpointstr)
+        crawler.restorecheckpoint(checkpoint)
 
     with StorageClient(taskid, config["schema"], store_schemas) as storage:
         with Logger(taskid) as logger:
             # 将读取到的每个条目尝试进行爬取
-            for errorItem in errorlogs:
-                start_url = errorItem[2]
-                start_page_schema = errorItem[3]
-                for page in crawler.getcrawledpages(start_url, None, start_page_schema):
-                    if page.status != "error":
-                        if valve.stop(page):
-                            logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
-                            break
-                        storage.send(page)
-                        logger.info(page.url, page.schema_name, "succeeded")
-                    else:
-                        logger.error(page.url, page.schema_name, str(page.error_msg))
+            for page in crawler:
+                if page.status != "error":
+                    storage.send(page)
+                    logger.info(page.url, page.schema_name, "succeeded")
+                    if valve.stop(page):
+                        logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
+                        break
+                else:
+                    logger.error(page.url, page.schema_name, str(page.error_msg))
+                if cancellation.cancel():
+                    # 符合任务暂停条件的时候，记录下当前爬取状态，然后停止
+                    checkpoint = crawler.getcheckpoint()
+                    f = open("Tasks/{0}/checkpoint.json".format(taskid), "w", encoding="utf-8")
+                    f.write(json.dumps(checkpoint))
+                    f.close()
+                    break
             logger.info("Task finished succesfully.")
 
 # 如果一个任务的页面已经爬取下来了，但是解析方式要变化，用这个方法在原有任务基础上重新解析
@@ -212,11 +226,12 @@ def ReExtractTask(taskid:str):
     browser = VirtualBrowser(dataloader, extractor)
 
     crawler = DeepFirstCrawler(browser)
+    crawler.addtargetpage(start_url, start_page_schema)
     valve = Valve.getvalvebyname(valve_name, valve_param)
 
     with StorageClient(taskid, config["schema"], store_schemas) as storage:
         with Logger(taskid) as logger:
-            for page in crawler.getcrawledpages(start_url, None, start_page_schema):
+            for page in crawler:
                 if page.status != "error":
                     if valve.stop(page):
                         logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
