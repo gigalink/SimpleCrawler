@@ -59,12 +59,20 @@ class DeepFirstCrawler:
                 base_url = self.currentpage.base_url
                 self.pagestack.append(self.currentpage)
                 self.currentpage = self.browser.openpage(nextlink[0], base_url, nextlink[1])
+                if self.currentpage.status < 0: # 说明访问的页面在本次任务中已经访问过了，直接略过
+                    self.currentpage = self.pagestack.pop()
+                    continue
                 return self.currentpage
             elif len(self.currentpage.siblings) > 0:
                 # 这个分支是子链接都处理完了的情况，那么currentpage也就完全处理完了，直接丢弃即可
                 nextlink = self.currentpage.siblings.pop()
                 base_url = self.currentpage.base_url
                 self.currentpage = self.browser.openpage(nextlink[0], base_url, nextlink[1])
+                if self.currentpage.status < 0: # 说明访问的页面在本次任务中已经访问过了，直接略过
+                    self.currentpage = None
+                    if len(self.pagestack) > 0:
+                        self.currentpage = self.pagestack.pop()
+                    continue
                 return self.currentpage
             else:
                 # 子链接和兄弟链接都小于0，那么就该返回上一级了
@@ -123,7 +131,7 @@ def StartTask(schema_file:str, start_url:str, start_page_schema:str, valve_name:
         with StorageClient(taskid, config["schema"], store_schemas) as storage:
             with Logger(taskid) as logger:
                 for page in crawler:
-                    if page.status != "error":
+                    if page.status != 1000:
                         storage.send(page)
                         logger.info(page.url, page.schema_name, "succeeded")
                         if valve.stop(page):
@@ -137,6 +145,7 @@ def StartTask(schema_file:str, start_url:str, start_page_schema:str, valve_name:
                         f = open("Tasks/{0}/checkpoint.json".format(taskid), "w", encoding="utf-8")
                         f.write(json.dumps(checkpoint))
                         f.close()
+                        logger.info("Task stopped here as a result of planning.")
                         break
                 logger.info("Task finished succesfully.")
 
@@ -181,7 +190,7 @@ def GoOnTask(taskid:str, cancellation:Cancellation):
             with Logger(taskid) as logger:
                 # 将读取到的每个条目尝试进行爬取
                 for page in crawler:
-                    if page.status != "error":
+                    if page.status != 1000:
                         storage.send(page)
                         logger.info(page.url, page.schema_name, "succeeded")
                         if valve.stop(page):
@@ -195,6 +204,7 @@ def GoOnTask(taskid:str, cancellation:Cancellation):
                         f = open("Tasks/{0}/checkpoint.json".format(taskid), "w", encoding="utf-8")
                         f.write(json.dumps(checkpoint))
                         f.close()
+                        logger.info("Task stopped here as a result of planning.")
                         break
                 logger.info("Task finished succesfully.")
 
@@ -230,7 +240,7 @@ def ReExtractTask(taskid:str):
         with StorageClient(taskid, config["schema"], store_schemas) as storage:
             with Logger(taskid) as logger:
                 for page in crawler:
-                    if page.status != "error":
+                    if page.status != 1000:
                         if valve.stop(page):
                             logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
                             break

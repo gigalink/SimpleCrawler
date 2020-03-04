@@ -105,7 +105,7 @@ class DataLoaderWithCache(DataLoader):
         file = open("Tasks/{0}/Source/0mapping.csv".format(taskid), "r", newline="", encoding="utf-8")
         reader = csv.reader(file)
         for row in reader:
-            self.mapping[row[0]] = row[1]
+            self.mapping[row[0]] = (row[1], 1)  # 第二个值1表示本轮任务还允许访问该页面1次
             self.pagecount += 1
         file.close()
 
@@ -124,15 +124,18 @@ class DataLoaderWithCache(DataLoader):
         f.close()
         self.sourcemappingwriter.writerow([url, sourcefilename])
         # 往内存映射中更新这一条
-        self.mapping[url] = sourcefilename
+        self.mapping[url] = (sourcefilename, 0) # 被缓存起来说明在本次任务中该页面被访问1次了，那么剩余次数就是0
 
     def load(self, url):
-        filename = self.mapping.get(url)
-        if filename is not None:
-            f = open(f"Tasks/{self.taskid}/{filename}", encoding="utf-8")
+        fileinfo = self.mapping.get(url)
+        if fileinfo is not None:
+            filename = fileinfo[0]
+            visit_count = fileinfo[1]
+            f = open(f"Tasks/{self.taskid}/Source/{filename}", encoding="utf-8")
             text = f.read()
             f.close()
-            return text, 0
+            self.mapping[url] = (filename, visit_count - 1)
+            return text, visit_count - 1
         text, status_code = super(DataLoaderWithCache, self).load(url)
         self.cache(url, text)
         return text, status_code
@@ -160,7 +163,7 @@ class VirtualBrowser:
         try:
             new_page.html_text, new_page.status = self.dataloader.load(new_page.url)
         except Exception as e:
-            new_page.status = "error"
+            new_page.status = 1000
             new_page.error_msg = e.args
             return new_page
         new_page.data, new_page.siblings, new_page.children = self.extractor.extract_from_html_text(new_page.html_text, schema_name)
@@ -174,5 +177,5 @@ class Page:
     url = None
     base_url = None
     html_text = ""
-    status = "empty"
+    status = 0  # 标准http状态码 + 1000表示异常 + 0表示访问缓存 + 负数表示访问缓存次数超过预期
     error_msg = None

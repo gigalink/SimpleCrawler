@@ -12,8 +12,9 @@ filter = []
 
 # CrawlerTask.ReExtractTask("2020-02-20-20-18-26")
 
-CrawlerTask.StartTask("CrawlerTaskLib\\BzmfxzSchema.json","http://www.bzmfxz.com/search.aspx?searchtype=0&Keyword=GB&page=1", "bzmfxz_list_page", "FieldValueValve", filter, ["bzmfxz_download_page"], "BZMFXZ")
-# CrawlerTask.RetryErrorItems("BZMFXZ)
+cancellation = CrawlerTask.Cancellation("2020-3-5 7:30:00")
+CrawlerTask.StartTask("CrawlerTaskLib\\BzmfxzSchema.json","http://www.bzmfxz.com/search.aspx?searchtype=0&Keyword=GB&page=1", "bzmfxz_list_page", "FieldValueValve", filter, ["bzmfxz_download_page"], cancellation, "BZMFXZ")
+# CrawlerTask.GoOnTask("BZMFXZ", cancellation)
 # CrawlerTask.ReExtractTask("BZMFXZ")
 
 
