@@ -3,6 +3,7 @@ import requests
 import re
 import datetime
 import csv
+import os
 
 # 支持读取schema配置来指定页面的解析方式
 class HtmlExtractor:
@@ -84,29 +85,57 @@ class DataLoader:
     # 其他地方失败一般来说就是因为某个固定错误，所以没有重试的必要
     def load(self, url):
         cookie = {} 
-        page = requests.get(url, cookies=cookie)
+        page = requests.get(url, timeout=(10,90), cookies=cookie) # 要设置超时时间，不然有的网站会永远等待下去
         page.encoding = page.apparent_encoding
-        return page.text
+        return page.text, page.status_code
 
-# 当数据已经被爬取到本地磁盘，仅仅做重新解析字段时使用，该类会将url映射为本地文件进行访问
-class LocalDataLoader(DataLoader):
-    def __init__(self, mappingfilepath:str):
-        self.mappingfilepath = mappingfilepath
+# 当数据已经被爬取到本地磁盘，则将url映射为本地文件进行访问，否则访问网络，并将结果缓存
+class DataLoaderWithCache(DataLoader):
+    def __init__(self, taskid:str):
+        self.taskid = taskid
         self.mapping = {}
-        file = open(f"{mappingfilepath}/0mapping.csv", "r", newline="", encoding="utf-8")
+        self.pagecount = 0 # 该实例累积保存的页面数
+        # 确保用作本地缓存空间的目录存在
+        if not os.path.exists("Tasks/{0}/Source".format(taskid)):
+            os.makedirs("Tasks/{0}/Source".format(taskid))
+        # 上面确保了该文件夹存在，下面以a模式准备好映射文件
+        self.sourcemappingfile = open("Tasks/{0}/Source/0mapping.csv".format(taskid), "a", newline="", encoding="utf-8")
+        self.sourcemappingwriter = csv.writer(self.sourcemappingfile)
+        # 在往里写数据之前，将其读取一遍，以在内存中做缓存映射
+        file = open("Tasks/{0}/Source/0mapping.csv".format(taskid), "r", newline="", encoding="utf-8")
         reader = csv.reader(file)
         for row in reader:
             self.mapping[row[0]] = row[1]
+            self.pagecount += 1
         file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, trace):
+        self.sourcemappingfile.close()
+
+    def cache(self, url, text):
+        # 默认情况下爬取到的页面源文件都需要存起来
+        self.pagecount += 1
+        sourcefilename = "{0}.html".format(self.pagecount)
+        f = open("Tasks/{0}/Source/{1}".format(self.taskid, sourcefilename), "wt", encoding="utf-8")
+        f.write(text)
+        f.close()
+        self.sourcemappingwriter.writerow([url, sourcefilename])
+        # 往内存映射中更新这一条
+        self.mapping[url] = sourcefilename
 
     def load(self, url):
         filename = self.mapping.get(url)
-        if filename is None:
-            raise Exception("The url does not exist in mapping file.")
-        f = open(f"{self.mappingfilepath}/{filename}", encoding="utf-8")
-        text = f.read()
-        f.close()
-        return text
+        if filename is not None:
+            f = open(f"Tasks/{self.taskid}/{filename}", encoding="utf-8")
+            text = f.read()
+            f.close()
+            return text, 0
+        text, status_code = super(DataLoaderWithCache, self).load(url)
+        self.cache(url, text)
+        return text, status_code
 
 class VirtualBrowser:
     def __init__(self, dataloader:DataLoader, extractor:HtmlExtractor):
@@ -129,7 +158,7 @@ class VirtualBrowser:
             new_page.base_url = parse_result.scheme + "://" + parse_result.netloc
 
         try:
-            new_page.html_text = self.dataloader.load(new_page.url)
+            new_page.html_text, new_page.status = self.dataloader.load(new_page.url)
         except Exception as e:
             new_page.status = "error"
             new_page.error_msg = e.args

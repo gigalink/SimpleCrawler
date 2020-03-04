@@ -8,16 +8,6 @@ class StorageClient:
         # schemas是爬取相关的所有页面类型设置
         # store_schemas是要保存的页面类型
         self.instanceid = taskid
-        # 这些用于保存原始html数据
-        if not os.path.exists("Tasks/{0}/Source".format(taskid)):
-            os.makedirs("Tasks/{0}/Source".format(taskid))
-            self.pagecount = 0 # 该实例累积保存的页面数
-        else:
-            pathinfo = os.walk(f"Tasks/{taskid}/Source")
-            rootpath = next(pathinfo)
-            self.pagecount = len(rootpath[2])-1
-        self.sourcemappingfile = open("Tasks/{0}/Source/0mapping.csv".format(taskid), "a", newline="", encoding="utf-8")
-        self.sourcemappingwriter = csv.writer(self.sourcemappingfile)
         # 这些用于保存解析后的结果
         self.datafiles = {}
         self.datafilewriters = {}
@@ -36,19 +26,10 @@ class StorageClient:
         return self
 
     def __exit__(self, type, value, trace):
-        self.sourcemappingfile.close()
         for key in self.datafiles:
             self.datafiles[key].close()
     
-    def send(self, page:Page, savesource:bool=True):
-        if savesource:
-            # 默认情况下爬取到的页面源文件都需要存起来
-            self.pagecount += 1
-            sourcefilename = "{0}.html".format(self.pagecount)
-            f = open("Tasks/{0}/Source/{1}".format(self.instanceid, sourcefilename), "wt", encoding="utf-8")
-            f.write(page.html_text)
-            f.close()
-            self.sourcemappingwriter.writerow([page.url, sourcefilename])
+    def send(self, page:Page):
         # 解析后的数据按需保存
         if page.schema_name in self.store_schemas:
             row = [page.url]

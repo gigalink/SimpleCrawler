@@ -1,4 +1,4 @@
-from CrawlerPage import HtmlExtractor,DataLoader,LocalDataLoader,VirtualBrowser,Page
+from CrawlerPage import HtmlExtractor,DataLoader,DataLoaderWithCache,VirtualBrowser,Page
 import Valve
 from Logger import Logger
 from StorageClient import StorageClient
@@ -79,7 +79,7 @@ class FileDataLoader(DataLoader):
         f = open(url, encoding="utf-8")
         text = f.read()
         f.close()
-        return text
+        return text, 200 # 假装是从网络里获取的
 
 class Cancellation:
     def __init__(self, param):
@@ -113,33 +113,32 @@ def StartTask(schema_file:str, start_url:str, start_page_schema:str, valve_name:
     config = json.loads(text)
     extractor = HtmlExtractor(config)
     # 初始化数据获取器，用于获取HTML文本
-    dataloader = DataLoader()
-    # dataloader = FileDataLoader()
-    browser = VirtualBrowser(dataloader, extractor)
+    with DataLoaderWithCache(taskid) as dataloader:
+        browser = VirtualBrowser(dataloader, extractor)
 
-    crawler = DeepFirstCrawler(browser)
-    crawler.addtargetpage(start_url, start_page_schema)
-    valve = Valve.getvalvebyname(valve_name, valve_param)
+        crawler = DeepFirstCrawler(browser)
+        crawler.addtargetpage(start_url, start_page_schema)
+        valve = Valve.getvalvebyname(valve_name, valve_param)
 
-    with StorageClient(taskid, config["schema"], store_schemas) as storage:
-        with Logger(taskid) as logger:
-            for page in crawler:
-                if page.status != "error":
-                    storage.send(page)
-                    logger.info(page.url, page.schema_name, "succeeded")
-                    if valve.stop(page):
-                        logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
+        with StorageClient(taskid, config["schema"], store_schemas) as storage:
+            with Logger(taskid) as logger:
+                for page in crawler:
+                    if page.status != "error":
+                        storage.send(page)
+                        logger.info(page.url, page.schema_name, "succeeded")
+                        if valve.stop(page):
+                            logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
+                            break
+                    else:
+                        logger.error(page.url, page.schema_name, str(page.error_msg))
+                    if cancellation.cancel():
+                        # 符合任务暂停条件的时候，记录下当前爬取状态，然后停止
+                        checkpoint = crawler.getcheckpoint()
+                        f = open("Tasks/{0}/checkpoint.json".format(taskid), "w", encoding="utf-8")
+                        f.write(json.dumps(checkpoint))
+                        f.close()
                         break
-                else:
-                    logger.error(page.url, page.schema_name, str(page.error_msg))
-                if cancellation.cancel():
-                    # 符合任务暂停条件的时候，记录下当前爬取状态，然后停止
-                    checkpoint = crawler.getcheckpoint()
-                    f = open("Tasks/{0}/checkpoint.json".format(taskid), "w", encoding="utf-8")
-                    f.write(json.dumps(checkpoint))
-                    f.close()
-                    break
-            logger.info("Task finished succesfully.")
+                logger.info("Task finished succesfully.")
 
 # 如果一个任务未跑完，或者有部分页面没有爬取成功，则用此方法重跑
 def GoOnTask(taskid:str, cancellation:Cancellation):
@@ -161,44 +160,43 @@ def GoOnTask(taskid:str, cancellation:Cancellation):
     config = json.loads(text)
     extractor = HtmlExtractor(config)
     # 初始化数据获取器，用于获取HTML文本
-    dataloader = DataLoader()
-    # dataloader = FileDataLoader()
-    browser = VirtualBrowser(dataloader, extractor)
+    with DataLoaderWithCache(taskid) as dataloader:
+        browser = VirtualBrowser(dataloader, extractor)
 
-    crawler = DeepFirstCrawler(browser)
-    valve = Valve.getvalvebyname(valve_name, valve_param)
+        crawler = DeepFirstCrawler(browser)
+        valve = Valve.getvalvebyname(valve_name, valve_param)
 
-    # 根据错误日志设定需要重爬的页面
-    with open("Tasks/{0}/error.csv".format(taskid), "r", newline="", encoding="utf-8") as errorlogfile:
-        errorlogreader = csv.reader(errorlogfile)
-        errorpagelinks = [(row[2], row[3]) for row in errorlogreader]
-        crawler.addtargetpages(errorpagelinks)
-    # 根据checkpoint记录恢复上次爬取中断的位置
-    with open("Tasks/{0}/checkpoint.json".format(taskid), "r", encoding="utf-8") as checkpointfile:
-        checkpointstr = checkpointfile.read()
-        checkpoint = json.loads(checkpointstr)
-        crawler.restorecheckpoint(checkpoint)
+        # 根据错误日志设定需要重爬的页面
+        with open("Tasks/{0}/error.csv".format(taskid), "r", newline="", encoding="utf-8") as errorlogfile:
+            errorlogreader = csv.reader(errorlogfile)
+            errorpagelinks = [(row[2], row[3]) for row in errorlogreader]
+            crawler.addtargetpages(errorpagelinks)
+        # 根据checkpoint记录恢复上次爬取中断的位置
+        with open("Tasks/{0}/checkpoint.json".format(taskid), "r", encoding="utf-8") as checkpointfile:
+            checkpointstr = checkpointfile.read()
+            checkpoint = json.loads(checkpointstr)
+            crawler.restorecheckpoint(checkpoint)
 
-    with StorageClient(taskid, config["schema"], store_schemas) as storage:
-        with Logger(taskid) as logger:
-            # 将读取到的每个条目尝试进行爬取
-            for page in crawler:
-                if page.status != "error":
-                    storage.send(page)
-                    logger.info(page.url, page.schema_name, "succeeded")
-                    if valve.stop(page):
-                        logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
+        with StorageClient(taskid, config["schema"], store_schemas) as storage:
+            with Logger(taskid) as logger:
+                # 将读取到的每个条目尝试进行爬取
+                for page in crawler:
+                    if page.status != "error":
+                        storage.send(page)
+                        logger.info(page.url, page.schema_name, "succeeded")
+                        if valve.stop(page):
+                            logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
+                            break
+                    else:
+                        logger.error(page.url, page.schema_name, str(page.error_msg))
+                    if cancellation.cancel():
+                        # 符合任务暂停条件的时候，记录下当前爬取状态，然后停止
+                        checkpoint = crawler.getcheckpoint()
+                        f = open("Tasks/{0}/checkpoint.json".format(taskid), "w", encoding="utf-8")
+                        f.write(json.dumps(checkpoint))
+                        f.close()
                         break
-                else:
-                    logger.error(page.url, page.schema_name, str(page.error_msg))
-                if cancellation.cancel():
-                    # 符合任务暂停条件的时候，记录下当前爬取状态，然后停止
-                    checkpoint = crawler.getcheckpoint()
-                    f = open("Tasks/{0}/checkpoint.json".format(taskid), "w", encoding="utf-8")
-                    f.write(json.dumps(checkpoint))
-                    f.close()
-                    break
-            logger.info("Task finished succesfully.")
+                logger.info("Task finished succesfully.")
 
 # 如果一个任务的页面已经爬取下来了，但是解析方式要变化，用这个方法在原有任务基础上重新解析
 def ReExtractTask(taskid:str):
@@ -222,22 +220,22 @@ def ReExtractTask(taskid:str):
     config = json.loads(text)
     extractor = HtmlExtractor(config)
     # 初始化数据获取器，用于获取HTML文本
-    dataloader = LocalDataLoader(f"Tasks/{taskid}/Source")
-    browser = VirtualBrowser(dataloader, extractor)
+    with DataLoaderWithCache(taskid) as dataloader:
+        browser = VirtualBrowser(dataloader, extractor)
 
-    crawler = DeepFirstCrawler(browser)
-    crawler.addtargetpage(start_url, start_page_schema)
-    valve = Valve.getvalvebyname(valve_name, valve_param)
+        crawler = DeepFirstCrawler(browser)
+        crawler.addtargetpage(start_url, start_page_schema)
+        valve = Valve.getvalvebyname(valve_name, valve_param)
 
-    with StorageClient(taskid, config["schema"], store_schemas) as storage:
-        with Logger(taskid) as logger:
-            for page in crawler:
-                if page.status != "error":
-                    if valve.stop(page):
-                        logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
-                        break
-                    storage.send(page, savesource=False)    # 因为本来就只是解析，源文件早已存在，所以就不用再存了
-                    logger.info(page.url, page.schema_name, "succeeded")
-                else:
-                    logger.error(page.url, page.schema_name, str(page.error_msg))
-            logger.info("Task finished succesfully.")
+        with StorageClient(taskid, config["schema"], store_schemas) as storage:
+            with Logger(taskid) as logger:
+                for page in crawler:
+                    if page.status != "error":
+                        if valve.stop(page):
+                            logger.info(page.url, "Reached valve value. Valve is {0}, param is {1}".format(valve_name, valve_param))
+                            break
+                        storage.send(page)
+                        logger.info(page.url, page.schema_name, "succeeded")
+                    else:
+                        logger.error(page.url, page.schema_name, str(page.error_msg))
+                logger.info("Task finished succesfully.")
