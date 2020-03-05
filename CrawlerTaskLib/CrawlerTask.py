@@ -140,13 +140,13 @@ def StartTask(schema_file:str, start_url:str, start_page_schema:str, valve_name:
                     else:
                         logger.error(page.url, page.schema_name, str(page.error_msg))
                     if cancellation.cancel():
-                        # 符合任务暂停条件的时候，记录下当前爬取状态，然后停止
-                        checkpoint = crawler.getcheckpoint()
-                        f = open("Tasks/{0}/checkpoint.json".format(taskid), "w", encoding="utf-8")
-                        f.write(json.dumps(checkpoint))
-                        f.close()
+                        # 符合任务暂停条件的时候停止
                         logger.info("Task stopped here as a result of planning.")
                         break
+                checkpoint = crawler.getcheckpoint()
+                f = open("Tasks/{0}/checkpoint.json".format(taskid), "w", encoding="utf-8")
+                f.write(json.dumps(checkpoint))
+                f.close()
                 logger.info("Task finished succesfully.")
 
 # 如果一个任务未跑完，或者有部分页面没有爬取成功，则用此方法重跑
@@ -199,13 +199,13 @@ def GoOnTask(taskid:str, cancellation:Cancellation):
                     else:
                         logger.error(page.url, page.schema_name, str(page.error_msg))
                     if cancellation.cancel():
-                        # 符合任务暂停条件的时候，记录下当前爬取状态，然后停止
-                        checkpoint = crawler.getcheckpoint()
-                        f = open("Tasks/{0}/checkpoint.json".format(taskid), "w", encoding="utf-8")
-                        f.write(json.dumps(checkpoint))
-                        f.close()
+                        # 符合任务暂停条件的时候停止
                         logger.info("Task stopped here as a result of planning.")
                         break
+                checkpoint = crawler.getcheckpoint()
+                f = open("Tasks/{0}/checkpoint.json".format(taskid), "w", encoding="utf-8")
+                f.write(json.dumps(checkpoint))
+                f.close()
                 logger.info("Task finished succesfully.")
 
 # 如果一个任务的页面已经爬取下来了，但是解析方式要变化，用这个方法在原有任务基础上重新解析
