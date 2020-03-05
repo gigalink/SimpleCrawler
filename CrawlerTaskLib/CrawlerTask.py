@@ -174,17 +174,17 @@ def GoOnTask(taskid:str, cancellation:Cancellation):
 
         crawler = DeepFirstCrawler(browser)
         valve = Valve.getvalvebyname(valve_name, valve_param)
-
-        # 根据错误日志设定需要重爬的页面
-        with open("Tasks/{0}/error.csv".format(taskid), "r", newline="", encoding="utf-8") as errorlogfile:
-            errorlogreader = csv.reader(errorlogfile)
-            errorpagelinks = [(row[2], row[3]) for row in errorlogreader]
-            crawler.addtargetpages(errorpagelinks)
+        
         # 根据checkpoint记录恢复上次爬取中断的位置
         with open("Tasks/{0}/checkpoint.json".format(taskid), "r", encoding="utf-8") as checkpointfile:
             checkpointstr = checkpointfile.read()
             checkpoint = json.loads(checkpointstr)
             crawler.restorecheckpoint(checkpoint)
+        # 根据错误日志设定需要重爬的页面
+        with open("Tasks/{0}/error.csv".format(taskid), "r", newline="", encoding="utf-8") as errorlogfile:
+            errorlogreader = csv.reader(errorlogfile)
+            errorpagelinks = [(row[2], row[3]) for row in errorlogreader]
+            crawler.addtargetpages(errorpagelinks)
 
         with StorageClient(taskid, config["schema"], store_schemas) as storage:
             with Logger(taskid) as logger:
